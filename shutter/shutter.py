@@ -2,7 +2,7 @@ import threading
 from threading import Thread
 import time
 
-from flask import Flask
+from flask import Flask, render_template, request
 
 try:
     import RPi.GPIO as GPIO
@@ -12,17 +12,17 @@ except ImportError:
 
 class Shutter(Thread):
 
-    def __init__(self, interval, total_shots, shutter_duration=0.1, focus_time=0, focus_port=18, shutter_port=16, *args,
+    def __init__(self, interval, total_frames, shutter_duration=0.1, focus_time=0, focus_port=18, shutter_port=16, *args,
                  **kwargs):
         super().__init__(*args, **kwargs)
-        self.interval = interval
-        self.shutter_duration = shutter_duration
-        self.focus_time = focus_time
+        self.interval = float(interval)
+        self.shutter_duration = float(shutter_duration)
+        self.focus_time = float(focus_time)
         if (interval > 5 and focus_time < 2):
             # after around 7 seconds the camera goes to sleep. we need a "focus" trigger to wake it up. we will just use 2 seconds for that
             self.focusTime = 2
-        self.total_shots = total_shots
-        self.remaining_shots = total_shots
+        self.total_shots = int(total_frames)
+        self.remaining_shots = int(total_frames)
         self.shots_taken = 0
 
         self.stop_condition = threading.Condition()
@@ -79,7 +79,6 @@ class Shutter(Thread):
             self.shots_taken += 1
             self.sleep_til_next()
 
-
         print("done")
         self.stop_condition.release()
         self.cleanup()
@@ -96,27 +95,88 @@ class PiShutterServer(Flask):
 app = PiShutterServer(__name__)
 
 
-@app.route("/")
-def hello():
-    return "Hello World!"
+def process(*args):
+    for string in args:
+        if string == "oreos":
+            return True
+
+    return False
 
 
-@app.route("/shutter/")
-def add_something():
-    if (not app.shutter_thread) or (not app.shutter_thread.is_alive()):
-        app.shutter_thread = Shutter(10, 13)
-        app.shutter_thread.start()
+last_used_values = {
+    "interval": 4,
+    "total_frames": 30,
+    "focus_time": 2,
+    "shutter_duration": 0.1,
+}
 
-    return """
-    <html><head>    <link rel="stylesheet" href="../static/style.css"></head><body>
-    {} of {} every {} seconds
-</body>
-</html>
-""".format(app.shutter_thread.remaining_shots, app.shutter_thread.total_shots,
-           app.shutter_thread.interval)
+last_fps_values = {
+    "fps": 30,
+    "shoot_duration": 2,
+    "clip_duration": 10,
+}
 
 
-@app.route("/stop/")
+@app.route('/', methods=['GET', 'POST'])
+def index():
+    if request.method == "GET":
+        return render_template("index.html")
+
+    if request.form["submit"] == "submit":
+        doritos = request.form["doritos"]
+        oreos = request.form["oreos"]
+        success = process(doritos, oreos)
+
+        return render_template("index.html", fooResponse="Successful" if success else "Failed")
+
+    elif request.form["submit"] == "pita":
+        success = process("pita")
+        return render_template("index.html", cooResponse="Successful" if success else "Failed")
+
+    elif request.form["submit"] == "chip":
+        success = process("chip")
+        return render_template("index.html", cooResponse="Successful" if success else "Failed")
+
+
+def is_running():
+    return app.shutter_thread and (app.shutter_thread.is_alive())
+
+
+@app.route("/fps", methods=["POST", "GET"])
+def fps():
+    if is_running():
+        return render_template("is_running.html")
+
+    if request.method == "GET":
+        return render_template("fps.html", **last_fps_values)
+
+    fps = float(request.form["fps"])
+    shoot_duration = float(request.form["shoot_duration"])
+    clip_duration = float(request.form["clip_duration"])
+    total_frames = fps * clip_duration
+    interval = (shoot_duration * 3600) / total_frames
+
+    return render_template("shutter.html", interval=interval, total_frames=total_frames)
+
+
+@app.route("/start", methods=["POST"])
+def start():
+    app.shutter_thread = Shutter(**(request.form))
+    app.shutter_thread.start()
+
+
+@app.route("/shutter", methods=["GET", "POST"])
+def shutter():
+    if is_running():
+        return render_template("is_running.html")
+
+    if request.method == "GET":
+        return render_template("shutter.html", **last_used_values)
+    if request.method == "POST":
+        return render_template("shutter.html", **request.form)
+
+
+@app.route("/stop", methods=["POST"])
 def stop():
     if app.shutter_thread and (app.shutter_thread.is_alive()):
         app.shutter_thread.remaining_shots = 0
