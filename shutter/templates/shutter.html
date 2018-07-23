@@ -1,23 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<meta name="viewport" content="width=device-width, initial-scale=2">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+        <link rel="stylesheet" href="../static/style.css">
 
+<body>
 
 {% if not focus_time %}
-    {% set focus_time=0 %}
+{% set focus_time=0 %}
 {% endif %}
 {% if not shutter_duration %}
-    {% set shutter_duration=0.1 %}
+{% set shutter_duration=0.1 %}
 {% endif %}
 
 <form action="/start" method="post">
 
 
-    interval:<br />
-    <input type="text" name="interval" value="{{ interval }}"><br />
-    total_frames:<br />
-    <input type="text" name="total_frames" value="{{ total_frames }}"><br />
-    focus_time:<br />
-    <input type="text" name="focus_time" value="{{ focus_time }}"><br />
-    shutter_duration:<br />
-    <input type="text" name="shutter_duration" value="{{ shutter_duration }}"><br />
+    interval:<br/>
+    <input type="text" name="interval" value="{{ interval }}"><br/>
+    total_frames:<br/>
+    <input type="text" name="total_frames" value="{{ total_frames }}"><br/>
+    focus_time:<br/>
+    <input type="text" name="focus_time" value="{{ focus_time }}"><br/>
+    shutter_duration:<br/>
+    <input type="text" name="shutter_duration" value="{{ shutter_duration }}"><br/>
 
     <input type="submit" value="submit">
 </form>
+
+</body>
+</html>

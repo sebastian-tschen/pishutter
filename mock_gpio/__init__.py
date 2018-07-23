@@ -1,17 +1,19 @@
+import logging
+
 class GPIO():
     pass
 
 
 def output(focusPort, param):
-    print("output: {} - {}".format(focusPort,param))
+    logging.debug("output: {} - {}".format(focusPort,param))
 
 
 def setmode(BOARD):
-    print("setmode: {}".format(BOARD))
+    logging.debug("setmode: {}".format(BOARD))
 
 
 def setup(focusPort, OUT):
-    print("setup: {} - {}".format(focusPort, OUT))
+    logging.debug("setup: {} - {}".format(focusPort, OUT))
 
 
 

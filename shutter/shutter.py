@@ -1,34 +1,37 @@
 import threading
+from logging import DEBUG
 from threading import Thread
 import time
 
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, url_for
+from werkzeug.utils import redirect
 
 try:
     import RPi.GPIO as GPIO
-except ImportError:
+except (ImportError, RuntimeError):
     import mock_gpio as GPIO
 
 
 class Shutter(Thread):
 
-    def __init__(self, interval, total_frames, shutter_duration=0.1, focus_time=0, focus_port=18, shutter_port=16, *args,
+    def __init__(self, interval, total_frames, shutter_duration=0.1, focus_time=0, focus_port=18,
+                 shutter_port=16, *args,
                  **kwargs):
         super().__init__(*args, **kwargs)
         self.interval = float(interval)
         self.shutter_duration = float(shutter_duration)
         self.focus_time = float(focus_time)
-        if (interval > 5 and focus_time < 2):
+        if (self.interval > 5 and self.focus_time < 2):
             # after around 7 seconds the camera goes to sleep. we need a "focus" trigger to wake it up. we will just use 2 seconds for that
-            self.focusTime = 2
-        self.total_shots = int(total_frames)
-        self.remaining_shots = int(total_frames)
+            self.focus_time = 2
+        self.total_shots = int(float(total_frames))
+        self.remaining_shots = self.total_shots
         self.shots_taken = 0
 
         self.stop_condition = threading.Condition()
 
-        self.focusPort = focus_port
-        self.shutterPort = shutter_port
+        self.focus_port = focus_port
+        self.shutter_port = shutter_port
 
     def sleep_til_next(self):
         next_time = self.first_time + (self.interval * self.shots_taken)
@@ -37,18 +40,18 @@ class Shutter(Thread):
             self.stop_condition.wait(sleep_time)
 
     def shutter_release(self):
-        print("focus")
-        GPIO.output(self.focusPort, True)
-        if (self.focusTime > 0):
-            time.sleep(self.focusTime)
-        print("shutter")
-        GPIO.output(self.shutterPort, True)
+        app.logger.info("focus")
+        GPIO.output(self.focus_port, True)
+        if (self.focus_time > 0):
+            time.sleep(self.focus_time)
+            app.logger.info("shutter")
+        GPIO.output(self.shutter_port, True)
 
         time.sleep(self.shutter_duration)
 
-        print("release")
-        GPIO.output(self.shutterPort, False)
-        GPIO.output(self.focusPort, False)
+        app.logger.info("release")
+        GPIO.output(self.shutter_port, False)
+        GPIO.output(self.focus_port, False)
 
     def init_gpio(self):
 
@@ -56,15 +59,15 @@ class Shutter(Thread):
         GPIO.setmode(GPIO.BOARD)
 
         # Sets up GPIO Pin 11 to Output
-        GPIO.setup(self.focusPort, GPIO.OUT)
-        GPIO.setup(self.shutterPort, GPIO.OUT)
+        GPIO.setup(self.focus_port, GPIO.OUT)
+        GPIO.setup(self.shutter_port, GPIO.OUT)
 
-        GPIO.output(self.shutterPort, False)
-        GPIO.output(self.focusPort, False)
+        GPIO.output(self.shutter_port, False)
+        GPIO.output(self.focus_port, False)
 
     def cleanup(self):
-        GPIO.output(self.focusPort, False)
-        GPIO.output(self.shutterPort, False)
+        GPIO.output(self.focus_port, False)
+        GPIO.output(self.shutter_port, False)
 
     def run(self):
 
@@ -79,7 +82,7 @@ class Shutter(Thread):
             self.shots_taken += 1
             self.sleep_til_next()
 
-        print("done")
+        app.logger.info("done")
         self.stop_condition.release()
         self.cleanup()
 
@@ -94,6 +97,7 @@ class PiShutterServer(Flask):
 
 app = PiShutterServer(__name__)
 
+app.logger.setLevel(DEBUG)
 
 def process(*args):
     for string in args:
@@ -145,7 +149,7 @@ def is_running():
 @app.route("/fps", methods=["POST", "GET"])
 def fps():
     if is_running():
-        return render_template("is_running.html")
+        return redirect(url_for('status'))
 
     if request.method == "GET":
         return render_template("fps.html", **last_fps_values)
@@ -161,14 +165,24 @@ def fps():
 
 @app.route("/start", methods=["POST"])
 def start():
-    app.shutter_thread = Shutter(**(request.form))
+    form = request.form
+    app.shutter_thread = Shutter(interval=form["interval"], total_frames=form["total_frames"],
+                                 shutter_duration=form["shutter_duration"],
+                                 focus_time=form["focus_time"], )
     app.shutter_thread.start()
+
+    return redirect(url_for('status'))
+
+
+@app.route("/status")
+def status():
+    return render_template("status.html", shutter_thread=app.shutter_thread)
 
 
 @app.route("/shutter", methods=["GET", "POST"])
 def shutter():
     if is_running():
-        return render_template("is_running.html")
+        return redirect(url_for('status'))
 
     if request.method == "GET":
         return render_template("shutter.html", **last_used_values)
@@ -184,9 +198,4 @@ def stop():
         app.shutter_thread.stop_condition.notify()
         app.shutter_thread.stop_condition.release()
 
-    return """
-    <html><head>    <link rel="stylesheet" href="../static/style.css"></head><body>
-    stopped
-</body>
-</html>
-"""
+    return redirect(url_for('status'))

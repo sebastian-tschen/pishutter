@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<meta name="viewport" content="width=device-width, initial-scale=2">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+        <link rel="stylesheet" href="../static/style.css">
+
+
+</head>
+<body>
+
+{% if ((not shutter_thread) or (not shutter_thread.is_alive())) %}
+<h1>STOPPED</h1>
+<p>
+
+<form action="/fps" method="get">
+    <input type="submit" name="fsp" value="fsp"><br />
+</form><form action="/shutter" method="get">
+    <input type="submit" name="shutter" value="shutter"><br />
+</form>
+
+{% else %}
+<h1>RUNNING</h1>
+interval: {{ shutter_thread.interval }} <br>
+total_shots: {{ shutter_thread.total_shots }} <br>
+shot: {{ shutter_thread.shots_taken }} <br>
+remaining_shots: {{ shutter_thread.remaining_shots }} <br>
+focus_time: {{ shutter_thread.focus_time }} <br>
+shutter_duration: {{ shutter_thread.shutter_duration }} <br><p>
+
+
+<form action="/stop" method="post">
+    <input type="submit" name="stop" value="Stop"><br />
+</form>
+
+{% endif %}
+
+
+</body>
+</html>
